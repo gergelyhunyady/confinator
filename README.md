@@ -1,25 +1,40 @@
 # Confinator
 
-`confinator` is a small python package aiming to bring for the configuration management of your python applications:
-- convenience and style from user perspective,
-- clean structure and ease of implementation from the developers point of view.  
+`confinator` is a microframework for python app configuration. It is built on top of the standard library
+[configparser](https://docs.python.org/3/library/configparser.html) package.
+
+The package aims to bring:
+- convenience and style for app users,
+- clean structure and ease of implementation for developers.  
 
 It actually provides:
-- a `git config` like command line interface for any of your application using INI style config file(s),
+- a `git config` like command line interface for applications using INI style config file(s),
 - dynamic validation of the config sections, options and values - using regular expressions,
 - example application using a practical layout when using `confinator`.
 
 __Behold the power of `confinator`:__ 
 
-TODO
+Assume you have integrated your application with `confinator`.
 
-## Installation
-Requires python 3.8+
+Users will be able to interact with the config file in `git config` like style, but with additional config validation:
+```bash
+# set the bar option in section foo to 103
+$ myapp config foo.bar 103
 
-TODO
+# regex validation prevents mistakes and typos 
+$ myapp config foo.bar baz
+"baz" is not a valid value for "foo.bar". Should match "^[1-9]\d{2}$" as a python regular expression.
 
-## Getting Started
+# list current config settings
+$ myapp config -l
+foo.bar=103
 
+# and much more..
+```
+
+## User Guide
+
+- [ Installation ](#installation)
 - [ Tutorial ](#tutorial)
 - [ Explanation ](#explanation)
 - [ API Reference ](#api_reference)
@@ -29,11 +44,56 @@ TODO
 - [ How-To ](#how_to)
   - [Regular expression](#regexp)
 
+<a name="installation"></a>
+### Installation
+Requires python 3.8+
+
+TODO
+
 <a name="tutorial"></a>
 ### Tutorial
 Check the example application in the [example_app](./example_app) directory.
 
-TODO
+There are 2 config files in action here:
+- [schema](./example_app/src/example_app/schema) - defines validation rules with regex
+- user config (~/.config/confinator/example_app/config) - users can configure the app via this file,
+this config file can be manipulated with a CLI
+
+Config file loading for the app is done in the [config.py](./example_app/src/example_app/config.py).
+It performs the validation of the user config file when reading it.
+
+The CLI for the config file can be defined:
+- as a [standalone config script](./example_app/scripts/config)
+```bash
+$ ./config -h
+usage: [-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]
+
+Get or set options in the config file located at /home/<USERNAME>/.config/confinator/example_app/config
+
+positional arguments:
+  name                  Name of the config parameter to get or set in
+                        "section.option" format.
+  value                 Value of the config parameter to set.
+
+optional arguments:
+  -h, --help            show this help message and exit
+
+Actions:
+  -l, --list            List all variables set in the config file.
+  -e, --edit            Opens the config file with the default editor.
+  --unset NAME          Remove a variable by name from the config file.
+  --unset-all           Remove all variables from the config file.
+  --list-valid-options  List the valid section, option and value formats.
+```
+- OR as a [subcommand of the whole application](./example_app/scripts/app).
+```bash
+# set option
+$ ./app config foo.bar 123
+
+# dynamic validation 
+$ ./app config foo.bar baz
+"baz" is not a valid value for "foo.bar". Should match "^[1-9]\d{2}$" as a python regular expression.
+```
 
 <a name="explanation"></a>
 ### Explanation
@@ -68,7 +128,13 @@ values. For more details on the file format check the same argument of the [Vali
 The class inherits from the `ValidConfig` class.
 Further keyword arguments can be passed to this parent class.
 
-__Usage example:__
+##### `.run(args: Optional[ArgumentParser] = None) -> None`
+Run the command line action.
+
+If `args` are not passed then it will parse command line arguments automatically.
+If passed then those will be used (practical to use it as a subcommand -> [example](./example_app/scripts/app)).
+
+__Simple usage example:__
 
 Create the script named e.g. `app_config`:
 ```python
@@ -83,7 +149,7 @@ cli.run()
 Get help for available actions:
 ```
 $ /path/to/script/app_config -h 
-usage: app_config [-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]
+usage: [-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]
 
 Get or set options in the config file located at /path/to/config/file
 
@@ -146,7 +212,7 @@ Further `**kwargs` will be passed to the underlying `configparser.Configparser` 
 `ValidConfig` subclasses [`configparser.Configparser`](https://docs.python.org/3/library/configparser.html#configparser.ConfigParser)
 thus you can use all its methods to manipulate the config. NOTE that the special "DEFAULT" section is not supported.
 
-##### save()
+##### `.save()`
 Validate and then dump the content of the in memory config to the `config_file`.
 
 <a name="validate_config"></a>

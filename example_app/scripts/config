@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Get and set config options for ExampleApp."""
+
+"""Separate config script for the example app."""
 
 from confinator.cli import ConfigCLI
-from example_app.config import USER_CONFIG_PATH, SCHEMA_CONFIG_PATH
+from example_app.config import USER_CONFIG_PATH, SCHEMA_PATH
 
-cli = ConfigCLI(config_file=USER_CONFIG_PATH, schema_file=SCHEMA_CONFIG_PATH)
+cli = ConfigCLI(config_file=USER_CONFIG_PATH, schema_file=SCHEMA_PATH)
 cli.run()

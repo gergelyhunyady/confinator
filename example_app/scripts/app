@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+
+"""Example app with a config subcommand."""
+
+from argparse import ArgumentParser
+
+from confinator.cli import ConfigCLI
+from example_app.boo import boo_conf_printer
+from example_app.config import USER_CONFIG_PATH, SCHEMA_PATH
+from example_app.foo import foo_conf_printer
+
+main_parser = ArgumentParser(description=__doc__)
+subparsers = main_parser.add_subparsers(title="Commands")
+
+config_cli = ConfigCLI(config_file=USER_CONFIG_PATH, schema_file=SCHEMA_PATH)
+config_parser = subparsers.add_parser(name="config", parents=[config_cli.parser], add_help=False)
+config_parser.set_defaults(func=config_cli.run)
+
+foo_parser = subparsers.add_parser(name="foo")
+foo_parser.set_defaults(func=foo_conf_printer)
+
+boo_parser = subparsers.add_parser(name="boo")
+boo_parser.set_defaults(func=boo_conf_printer)
+
+args = main_parser.parse_args()
+
+if hasattr(args, "func"):
+    args.func(args)
+else:
+    main_parser.print_help()

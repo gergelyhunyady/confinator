@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-import argparse
 import logging
 import os
 import re
 import subprocess
 import sys
+from argparse import ArgumentParser
 from configparser import NoSectionError, NoOptionError
 from pathlib import Path
-from typing import NamedTuple, Union
+from typing import NamedTuple, Union, Optional
 
 from .validation import ValidConfig, InvalidConfigError
 
@@ -58,6 +58,13 @@ class ConfigCLI(ValidConfig):
         self._config_file = Path(config_file)
         self._schema_file = Path(schema_file)
 
+        self._parser = self._get_arg_parser()
+
+    @property
+    def parser(self) -> ArgumentParser:
+        """Expose the parser object for subparsers."""
+        return self._parser
+
     def _validate(self) -> None:
         try:
             super()._validate()
@@ -65,11 +72,11 @@ class ConfigCLI(ValidConfig):
             _log.error(e)
             sys.exit(1)
 
-    def _get_arg_parser(self) -> argparse.ArgumentParser:
+    def _get_arg_parser(self) -> ArgumentParser:
         """Create argument parser with required arguments."""
-        parser = argparse.ArgumentParser(
+        parser = ArgumentParser(
             description=f"Get and set options in the config file located at {self._config_file}",
-            usage=f"%(prog)s [-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]",
+            usage="[-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]",
         )
 
         parser.add_argument(
@@ -97,14 +104,14 @@ class ConfigCLI(ValidConfig):
 
         return parser
 
-    def run(self) -> None:
+    def run(self, args: Optional[ArgumentParser] = None) -> None:
         """Parse command line arguments and run required action accordingly."""
-        parser = self._get_arg_parser()
-        args = parser.parse_args()
+        if args is None:
+            args = self._parser.parse_args()
 
         if args.name:
             if any([args.unset_name, args.unset_all, args.list, args.edit, args.list_valid_options]):
-                parser.error("Positional arguments and actions are not allowed together!")
+                self._parser.error("Positional arguments and actions are not allowed together!")
             try:
                 parts = _SectionOption.from_dot_notation(args.name)
             except ValueError as e:
@@ -136,7 +143,7 @@ class ConfigCLI(ValidConfig):
             self._edit()
 
         else:
-            parser.print_help()
+            self._parser.print_help()
 
     def _set_option(self, section: str, option: str, value: str) -> None:
         """Set option value or add new option."""

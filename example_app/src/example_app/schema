@@ -1,0 +1,6 @@
+[^foo$]
+^bar$ = ^[1-9]\d{2}$
+^baz_\w+$ = ^(1|yes|true|on|0|no|false|off)$
+
+[^boo$]
+^bar$ = ^[1-9]\d{2}$

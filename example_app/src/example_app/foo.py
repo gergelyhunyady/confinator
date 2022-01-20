@@ -3,5 +3,5 @@
 from .config import conf
 
 
-def conf_printer() -> None:
+def foo_conf_printer(args) -> None:
     print(conf.foo)

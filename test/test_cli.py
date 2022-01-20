@@ -7,7 +7,6 @@ import sys
 import unittest
 from configparser import ConfigParser, NoSectionError, NoOptionError
 from io import StringIO
-from os.path import basename
 from pathlib import Path
 from unittest.mock import patch, MagicMock, Mock, create_autospec, call
 
@@ -15,7 +14,7 @@ from confinator.cli import ConfigCLI, _SectionOption
 from confinator.validation import InvalidConfigError
 
 EXPECTED_HELP_MSG = f"""\
-usage: {basename(sys.argv[0])} [-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]
+usage: [-h | name | name value | -l | -e | --unset NAME | --unset-all | --list-valid-options]
 
 Get and set options in the config file located at /some/test/path
 
@@ -77,17 +76,20 @@ class TestSectionOption(unittest.TestCase):
                 )
 
 
-class TestCLIConfigInit(unittest.TestCase):
+class TestConfigCLIInit(unittest.TestCase):
     """Test the initialization of the ConfigCLI class."""
 
+    @patch.object(ConfigCLI, "_get_arg_parser")
     @patch("confinator.cli.ValidConfig.__init__")
-    def test_init(self, mock_parent_init: MagicMock) -> None:
+    def test_init(self, mock_parent_init: MagicMock, mock_get_arg_parser: MagicMock) -> None:
         """Test the __init__ method of the ConfigCLI.
 
         GIVEN a string path representing the config file,
             AND another string path representing the valid config file,
         WHEN instantiating a ConfigCLI object with them and with some extra arguments,
         THEN the __init__ method of the parent class should be called with the correct arguments,
+            AND the _get_arg_parser method is called once
+            AND the _parser attr and parser property are the return value of the above call,
             AND the _config_file attribute of the created instance should be the first path converted to pathlib Path,
             AND the _schema_file attribute of the created instance should be the second path converted to pathlib Path.
         """
@@ -103,11 +105,14 @@ class TestCLIConfigInit(unittest.TestCase):
         mock_parent_init.assert_called_once_with(
             config_file=mock_config_file, schema_file=mock_schema_file, first=first, second=second
         )
+        mock_get_arg_parser.assert_called_once_with()
         self.assertEqual(config._config_file, Path(mock_config_file))
         self.assertEqual(config._schema_file, Path(mock_schema_file))
+        self.assertEqual(config._parser, mock_get_arg_parser.return_value)
+        self.assertEqual(config.parser, mock_get_arg_parser.return_value)
 
 
-class TestCLIConfig(unittest.TestCase):
+class TestConfigCLI(unittest.TestCase):
     """Test the different methods of the ConfigCLI class."""
 
     @patch.object(ConfigCLI, "__init__", lambda *_: None)
@@ -278,19 +283,18 @@ class TestCLIConfig(unittest.TestCase):
         self.assertEqual(cm.exception.code, 2)
 
     @patch.object(ConfigCLI, "_get_option")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_name_only(self, mock_get_arg_parser: MagicMock, mock_get_option: MagicMock) -> None:
+    def test_run_with_name_only(self, mock_get_option: MagicMock) -> None:
         """Test the run method when only one positional argument is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with only the name argument
                 being not the default.
         WHEN calling the run method on the ConfigCLI object
         THEN the _get_option method of this same object should be called once with the correct args.
         """
         # Setup environment.
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name="section_name.option_name",
             value=None,
@@ -300,30 +304,27 @@ class TestCLIConfig(unittest.TestCase):
             unset_all=False,
             list_valid_options=False,
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_get_option.assert_called_once_with("section_name", "option_name")
 
     @patch.object(ConfigCLI, "_set_option")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_name_and_value(self, mock_get_arg_parser: MagicMock, mock_set_option: MagicMock) -> None:
+    def test_run_with_name_and_value(self, mock_set_option: MagicMock) -> None:
         """Test the run method when two positional arguments are passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with the name and value
                 arguments being not the default.
         WHEN calling the run method on the ConfigCLI object
         THEN the _set_option method of this same object should be called once with the correct args.
         """
         # Setup environment.
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name="section_name.option_name",
             value="option_value",
@@ -333,22 +334,19 @@ class TestCLIConfig(unittest.TestCase):
             unset_all=False,
             list_valid_options=False,
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_set_option.assert_called_once_with("section_name", "option_name", "option_value")
 
-    @patch.object(argparse.ArgumentParser, "parse_args")
-    def test_run_with_incorrect_args(self, mock_parse_args: MagicMock) -> None:
+    def test_run_with_incorrect_args(self) -> None:
         """Test the run method when both positional and optional arguments are passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with the name and
                 edit arguments being not the default.
         WHEN calling the run method on the ConfigCLI object
@@ -356,6 +354,7 @@ class TestCLIConfig(unittest.TestCase):
                 called with the correct message.
         """
         # Setup environment.
+        self.mock_config._parser = argparse.ArgumentParser()
         self.mock_config._config_file = Path("/foo/bar")
         args = argparse.Namespace(
             name="section_name.option_name",
@@ -366,7 +365,7 @@ class TestCLIConfig(unittest.TestCase):
             unset_all=False,
             list_valid_options=False,
         )
-        mock_parse_args.return_value = args
+        self.mock_config._parser.parse_args = Mock(return_value=args)
 
         # Run and assert.
         with self.assertRaises(SystemExit) as cm, patch("sys.stderr", new_callable=StringIO):
@@ -374,19 +373,18 @@ class TestCLIConfig(unittest.TestCase):
         self.assertEqual(cm.exception.code, 2)
 
     @patch.object(ConfigCLI, "_unset_option")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_unset_name(self, mock_get_arg_parser: MagicMock, mock_unset_option: MagicMock) -> None:
+    def test_run_with_unset_name(self, mock_unset_option: MagicMock) -> None:
         """Test the run method when unset_name is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with the unset_name arguments
                 being not the default.
         WHEN calling the run method on the ConfigCLI object
         THEN the _unset_option method of this object should be called once with the correct args.
         """
         # Setup environment.
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name=None,
             value=None,
@@ -396,150 +394,129 @@ class TestCLIConfig(unittest.TestCase):
             unset_all=False,
             list_valid_options=False,
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_unset_option.assert_called_once_with("section_name", "option_name")
 
     @patch.object(ConfigCLI, "_unset_all")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_unset_all(self, mock_get_arg_parser: MagicMock, mock_unset_all: MagicMock) -> None:
+    def test_run_with_unset_all(self, mock_unset_all: MagicMock) -> None:
         """Test the run method when unset_all=True is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with True unset_all argument
         WHEN calling the run method on the ConfigCLI object
         THEN the _unset_all method of this object should be called.
         """
         # Setup environment.
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name=None, value=None, unset_name=None, list=False, edit=False, unset_all=True, list_valid_options=False
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_unset_all.assert_called_once_with()
 
     @patch.object(ConfigCLI, "_list")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_list(self, mock_get_arg_parser: MagicMock, mock_list: MagicMock) -> None:
+    def test_run_with_list(self, mock_list: MagicMock) -> None:
         """Test the run method when list=True is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with True list argument
         WHEN calling the run method on the ConfigCLI object
         THEN the _list method of this object should be called.
         """
         # Setup environment.
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name=None, value=None, unset_name=None, list=True, edit=False, unset_all=False, list_valid_options=False
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_list.assert_called_once_with()
 
     @patch.object(ConfigCLI, "_print_valid_config")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_list_valid_options(
-        self, mock_get_arg_parser: MagicMock, mock_print_valid_config: MagicMock
-    ) -> None:
+    def test_run_with_list_valid_options(self, mock_print_valid_config: MagicMock) -> None:
         """Test the run method when list_valid_options=True is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.ArgumentParser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling parse_args method on this returns an argparse.Namespace with True list_valid_options argument
         WHEN calling the run method on the ConfigCLI object
         THEN the _print_valid_config method of this object should be called.
         """
         # Setup environment.
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name=None, value=None, unset_name=None, list=False, edit=False, unset_all=False, list_valid_options=True
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_print_valid_config.assert_called_once_with()
 
     @patch.object(ConfigCLI, "_edit")
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_edit(self, mock_get_arg_parser: MagicMock, mock_edit: MagicMock) -> None:
+    def test_run_with_edit(self, mock_edit: MagicMock) -> None:
         """Test the run method when edit=True is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.Argumentparser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with the edit argument being
                 True.
         WHEN calling the run method on the ConfigCLI object
         THEN the _edit method of this object should be called.
         """
         # Setup environment.
-        self.mock_config._schema = True
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name=None, value=None, unset_name=None, list=False, edit=True, unset_all=False, list_valid_options=False
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
         mock_edit.assert_called_once_with()
 
-    @patch.object(ConfigCLI, "_get_arg_parser")
-    def test_run_with_no_args(self, mock_get_arg_parser: MagicMock) -> None:
+    def test_run_with_no_args(self) -> None:
         """Test the run method when no arg is passed.
 
         GIVEN a ConfigCLI object,
-            AND the _get_arg_parser method of this object returns an argparse.Argumentparser object
+            AND its _parser attribute is an argparse.ArgumentParser object
             AND calling the parse_args method on this returns an argparse.Namespace object with all arguments being
                 default.
         WHEN calling the run method on the ConfigCLI object
         THEN the print_help method of the parser object should be called.
         """
         # Setup environment.
-        self.mock_config._schema = None
-        mock_parser = create_autospec(argparse.ArgumentParser)
+        self.mock_config._parser = create_autospec(argparse.ArgumentParser)
         args = argparse.Namespace(
             name=None, value=None, unset_name=None, list=False, edit=False, unset_all=False, list_valid_options=False
         )
-        mock_parser.parse_args.return_value = args
-        mock_get_arg_parser.return_value = mock_parser
+        self.mock_config._parser.parse_args.return_value = args
 
         # Run.
         self.mock_config.run()
 
         # Assert.
-        mock_get_arg_parser.assert_called_once_with()
-        mock_parser.print_help.assert_called_once_with()
+        self.mock_config._parser.print_help.assert_called_once_with()
 
     @patch.object(ConfigCLI, "save")
     @patch("confinator.cli.ValidConfig.set")
@@ -887,7 +864,7 @@ def mock_read(self, f):
     return True
 
 
-class TestCLIConfigFunctionality(unittest.TestCase):
+class TestConfigCLIFunctionality(unittest.TestCase):
     """Higher level tests for the ConfigCLI class."""
 
     @patch("confinator.cli.Path", lambda x: x)
