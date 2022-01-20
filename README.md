@@ -60,7 +60,7 @@ There are 2 config files in action here:
 this config file can be manipulated with a CLI
 
 Config file loading for the app is done in the [config.py](./example_app/src/example_app/config.py).
-It performs the validation of the user config file when reading it.
+It also performs validation of the user config file when reading it.
 
 The CLI for the config file can be defined:
 - as a [standalone config script](./example_app/scripts/config)
@@ -140,7 +140,6 @@ Create the script named e.g. `app_config`:
 ```python
 #!/usr/bin/env python3
 
-import sys
 from confinator.cli import ConfigCLI
 
 cli = ConfigCLI(config_file=<USER_CONFIG_PATH>, schema_file=<SCHEMA_CONFIG_PATH>)
@@ -186,7 +185,7 @@ class ValidConfig(
     **kwargs,
 )
 ```
-Read INI style config_file(s) into a [`configparser.Configparser`](https://docs.python.org/3/library/configparser.html#configparser.ConfigParser)
+Read INI style config_file(s) into a [`configparser.ConfigParser`](https://docs.python.org/3/library/configparser.html#configparser.ConfigParser)
 representation and validate the section and option names, and also their value against a schema.
 
 `config_file` is the path of the INI config file that will be loaded, or a list of hierarchical config files.
@@ -207,9 +206,9 @@ Example format:
 `use_case_sensitive_option_names` will disable the default behavior of converting each option name
 to lowercase when reading the config file.
 
-Further `**kwargs` will be passed to the underlying `configparser.Configparser` constructor.
+Further `**kwargs` will be passed to the underlying `configparser.ConfigParser` constructor.
 
-`ValidConfig` subclasses [`configparser.Configparser`](https://docs.python.org/3/library/configparser.html#configparser.ConfigParser)
+`ValidConfig` subclasses [`configparser.ConfigParser`](https://docs.python.org/3/library/configparser.html#configparser.ConfigParser)
 thus you can use all its methods to manipulate the config. NOTE that the special "DEFAULT" section is not supported.
 
 ##### `.save()`
@@ -223,7 +222,7 @@ validate_config(config: ConfigParser, schema: ConfigParser) -> None
 Validate the `config` against the `schema` using regular expressions.
 Refer to the description of the [ ValidConfig ](#ValidConfig) class for more detail on the schema.
 
-Raises `InvalidSectionError`, `InvalidOptionError` or `InvalidValueError` (all subclassing `InvalidCOnfigError`)
+Raises `InvalidSectionError`, `InvalidOptionError` or `InvalidValueError` (all subclassing `InvalidConfigError`)
 when the validation fails. 
 
 <a name="how_to"></a>
